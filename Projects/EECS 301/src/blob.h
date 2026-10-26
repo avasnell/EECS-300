@@ -20,6 +20,8 @@ typedef struct {
   uint16_t area; //area of blob
   uint8_t age; //how many frames the blob has been there
   vector<Pixel> pixels; //pixels that make upS the blob
+  int (*matrix_just_blob)[24][32];
+
 } Blob;
 
 
@@ -37,6 +39,10 @@ typedef struct{
     int (*matrix_of_temps)[24][32];
     Prev_Frame previous_frame;
 } Frame;
+
+typedef struct{
+    int count;
+} Counter;
 
 bool track_blob_direction (int previous_x_cent, int current_x_cent);
 vector<Blob> get_Blobs(const Frame& frame);

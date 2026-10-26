@@ -2,25 +2,19 @@
 #include <vector>
 #include <cstdint>
 #include <queue>
+#include <map>
 
 
 using namespace std;
 
 #define PIXEL_COUNT_THRESHOLD 20
+#define PIXEL_HEAT_THRESHOLD 30
 
-//determine if blob is headiing in enter direction or exit direction
-//1 is enter and 0 is exit
-bool track_blob_direction (int previous_x_cent, int current_x_cent) {
-  //determine if blob is moving in enter direction or exit direction
-  if (current_x_cent > previous_x_cent) {
-    return true; //enter direction
-  } else {
-    return false; //exit direction
-  }
-  
-}
+
 
 vector<Blob> get_Blobs(const Frame& frame){
+  //id number gets defined when creating the vector of blobs
+  int id_number = 1;
   bool visited[24][32] = {false}; //initialize visited array to false
     vector<Blob> blobs;
     for (int r = 0; r < 24; r++){
@@ -28,6 +22,8 @@ vector<Blob> get_Blobs(const Frame& frame){
             if ((*frame.matrix_of_temps)[r][c] > 0){
                 Blob blob = find_Blob(visited, r, c, frame); 
                 if (blob.area > PIXEL_COUNT_THRESHOLD){
+                    blob.id = id_number;
+                    id_number++;
                     blobs.push_back(blob);
                 }
             }
@@ -67,7 +63,6 @@ Blob find_Blob(bool (&visited)[24][32], int startR, int startC, const Frame& fra
         const int dc[] = {-1,  0,  1, -1, 1, -1, 0, 1};
       
         for (int i = 0; i < 8; ++i){
-          //Serial.println("hey guys");
             int newR = current_pixel.row + dr[i];
             int newC = current_pixel.col + dc[i];
             if (newR >= 0 && newR < 24 && newC >= 0 && newC < 32) { 
@@ -77,17 +72,35 @@ Blob find_Blob(bool (&visited)[24][32], int startR, int startC, const Frame& fra
                 }
             }
         }
-       // Serial.println("hey guyssgfdoxjhkfdjghod");
     }
+    
+    blob.matrix_just_blob = map_blob_pixels_to_matrix(blob.pixels);
     int area = blob.pixels.size();
-    float x_centroidd = x_centroid(*frame.matrix_of_temps);
-    float y_centroidd = y_centroid(*frame.matrix_of_temps);
-    float max_tempp = max_temp(*frame.matrix_of_temps);
+    float x_centroidd = x_centroid(*blob.matrix_just_blob);
+    float y_centroidd = y_centroid(*blob.matrix_just_blob);
+    float max_tempp = max_temp(*blob.matrix_just_blob);
     blob.area = area;
     blob.centroid_x = x_centroidd;
     blob.centroid_y = y_centroidd;
     blob.max_temp = max_tempp;
     return blob;
+}
+
+//
+auto map_blob_pixels_to_matrix(std::vector<Pixel> pixels) -> int (*)[24][32] {
+  int (*mapped_matrix)[24][32] = {0};
+  for (int r = 0; r < 24; r++){
+    for (int c = 0; c < 32; c++){
+      for (int i = 0; i < pixels.size(); i++){
+        if (pixels[i].row ==  r && pixels[i].col == c){
+          (*mapped_matrix)[r][c] = PIXEL_HEAT_THRESHOLD;
+        } else {
+          (*mapped_matrix)[r][c] = 0;
+        }
+      }
+    }
+  }
+  return mapped_matrix;
 }
 
 //find area of blob
@@ -158,6 +171,149 @@ float y_centroid (int tempValues[24][32]){
   return sum_weight_y / sum_mass;
 }
 
+vector<Blob> which_blob(vector<Blob> blobs, const Frame& cur_frame, const Prev_Frame& prev_frame){
+   
+    //map to store ID value of blobs in previous frame and their corresponding distances to blobs in current frame
+    std::map<uint8_t, std::vector<float>> distances;
+
+    //if there is only one blob in both current and previous frame, assume they are the same blob
+    if (cur_frame.number_of_blobs == 1 && prev_frame.prev_number_of_blobs == 1) {
+      Blob blob = cur_frame.blobs[0];
+      blob.age++;
+      return blobs;
+    } else {
+      
+      //store centroids of current and previous blobs in vectors
+      vector<std::pair<float,float>> current_centroids;
+      for (int i = 0; i < blobs.size(); i++){
+            Blob current_blob = blobs[i];
+            std::pair<float, float> centroids;
+            centroids.first = current_blob.centroid_x;
+            centroids.second = current_blob.centroid_y;
+            current_centroids.push_back(centroids);
+          }
+      
+      vector<std::pair<float,float>> past_centroids;
+      for(int i = 0; i < prev_frame.prev_blobs.size(); i++){
+        Blob current_blob = prev_frame.prev_blobs[i];
+        std::pair<float, float> centroids;
+        centroids.first = current_blob.centroid_x;
+        centroids.second =current_blob.centroid_y;
+        past_centroids.push_back(centroids);
+      }
+
+      //calculate distances between current and previous centroids and store in map
+      for(int i = 0; i < current_centroids.size(); i++){
+        for(int j = 0; j < past_centroids.size(); j++){
+          float distance = sqrt(pow(current_centroids[i].first - past_centroids[j].first, 2) + pow(current_centroids[i].second - past_centroids[j].second, 2));
+          distances[i].push_back(distance);
+        }
+      }
+
+      //go through and find the closest current blob to each previous blob and assign the IDs of the previous blobs to the current blobs
+      vector<Blob> return_Blobs;
+      for (int i = 0; i < distances.size(); i++){
+        float min_distance = distances[i][0];
+        int min_index = 0;
+        for (int j = 1; j <distances[i].size(); j++){
+           float distance_compare = distances[i][j];
+           if(distance_compare < min_distance){
+            min_distance = distance_compare;
+            min_index = j;
+           }
+        
+        Blob push_back_Blob;
+        push_back_Blob.id = blobs[min_index].id;
+
+        push_back_Blob.age = blobs[min_index].age++;
+        
+        return_Blobs.push_back(push_back_Blob);  
+        }
+
+      }
+      
+      
+      return return_Blobs;
+    }
+}
+
+//determine if blob is headiing in enter direction or exit direction
+//1 is enter and 0 is exit
+bool track_blob_direction_and_count (vector<Blob> blobs, const Frame& cur_frame, const Prev_Frame& prev_frame, Counter increment) {
+  vector<Blob> current_blobs = which_blob(blobs, cur_frame, prev_frame);
+  vector<Blob> past_blobs = prev_frame.prev_blobs;
+
+  uint8_t usable_size = 0;
+
+  if(current_blobs.size() < past_blobs.size()){
+    usable_size = current_blobs.size();
+  } else if (current_blobs.size() > past_blobs.size()) {
+    usable_size = past_blobs.size();
+  } else {
+    usable_size = past_blobs.size();
+  }
+
+  for(int i = 0; i < usable_size; i++){
+    float y_centroid_past = past_blobs[i].centroid_y;
+    float y_centroid_current = current_blobs[i].centroid_y;
+    int count = increment.count;
+    if (y_centroid_current > y_centroid_past){
+      if(count > 0){
+         count -=1;
+      } 
+    }
+
+    if(y_centroid_current < y_centroid_past){
+      count += 1;
+    }
+  }
+  
+  
+  
+  
+  
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
 // take in a blob and identify based on closest centroid of previous frame
 Blob which_blob (Blob blob) {
   Frame cur_frame;
@@ -196,3 +352,4 @@ Blob which_blob (Blob blob) {
 
   // case where there are more blobs in cur than prev
 }
+  */
