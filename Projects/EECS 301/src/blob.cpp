@@ -3,16 +3,30 @@
 #include <cstdint>
 #include <queue>
 
+
 using namespace std;
 
-#define PIXEL_COUNT_THRESHOLD 40
+#define PIXEL_COUNT_THRESHOLD 20
+
+//determine if blob is headiing in enter direction or exit direction
+//1 is enter and 0 is exit
+bool track_blob_direction (int previous_x_cent, int current_x_cent) {
+  //determine if blob is moving in enter direction or exit direction
+  if (current_x_cent > previous_x_cent) {
+    return true; //enter direction
+  } else {
+    return false; //exit direction
+  }
+  
+}
 
 vector<Blob> get_Blobs(const Frame& frame){
+  bool visited[24][32] = {false}; //initialize visited array to false
     vector<Blob> blobs;
     for (int r = 0; r < 24; r++){
         for (int c = 0; c < 32; c++){
             if ((*frame.matrix_of_temps)[r][c] > 0){
-                Blob blob = find_Blob(r, c, frame);
+                Blob blob = find_Blob(visited, r, c, frame); 
                 if (blob.area > PIXEL_COUNT_THRESHOLD){
                     blobs.push_back(blob);
                 }
@@ -24,7 +38,7 @@ vector<Blob> get_Blobs(const Frame& frame){
 
 
 //Breadth-first search to find a blob starting from a given pixel
-Blob find_Blob(int startR, int startC, const Frame& frame){
+Blob find_Blob(bool (&visited)[24][32], int startR, int startC, const Frame& frame){
      Blob blob = {0, 0, 0, 0, 0, 0};
 
      //if empty, return empty blob
@@ -37,7 +51,6 @@ Blob find_Blob(int startR, int startC, const Frame& frame){
     Pixel start_pixel = {startR, startC}; 
     q.push(start_pixel);
 
-    bool visited[24][32] = {false};
     visited[startR][startC] = true;
 
     while (!q.empty()){
@@ -54,6 +67,7 @@ Blob find_Blob(int startR, int startC, const Frame& frame){
         const int dc[] = {-1,  0,  1, -1, 1, -1, 0, 1};
       
         for (int i = 0; i < 8; ++i){
+          //Serial.println("hey guys");
             int newR = current_pixel.row + dr[i];
             int newC = current_pixel.col + dc[i];
             if (newR >= 0 && newR < 24 && newC >= 0 && newC < 32) { 
@@ -63,15 +77,16 @@ Blob find_Blob(int startR, int startC, const Frame& frame){
                 }
             }
         }
+       // Serial.println("hey guyssgfdoxjhkfdjghod");
     }
     int area = blob.pixels.size();
-    float x_centroid = x_centroid(*frame.matrix_of_temps);
-    float y_centroid = y_centroid(*frame.matrix_of_temps);
-    float max_temp = max_temp(*frame.matrix_of_temps);
+    float x_centroidd = x_centroid(*frame.matrix_of_temps);
+    float y_centroidd = y_centroid(*frame.matrix_of_temps);
+    float max_tempp = max_temp(*frame.matrix_of_temps);
     blob.area = area;
-    blob.centroid_x = x_centroid;
-    blob.centroid_y = y_centroid;
-    blob.max_temp = max_temp;
+    blob.centroid_x = x_centroidd;
+    blob.centroid_y = y_centroidd;
+    blob.max_temp = max_tempp;
     return blob;
 }
 
@@ -141,4 +156,28 @@ float y_centroid (int tempValues[24][32]){
   }
   if (sum_mass == 0) return 0;
   return sum_weight_y / sum_mass;
+}
+
+// take in a blob and identify based on closest centroid of previous frame
+Blob which_blob (Blob blob) {
+  Frame cur_frame;
+  Prev_Frame prev_frame;
+  float current_x = blob.centroid_x;
+  float current_y = blob.centroid_y;
+
+  // if there's only one blob in both current and previous, assume they are the same
+  if (cur_frame.number_of_blobs == 1 && prev_frame.prev_number_of_blobs == 1) {
+    blob.age++;
+    return cur_frame.blobs[0]; // verify that the only blob is in index 0
+    // verify that this vector has the updated blob age
+  }
+
+  // case where there are more blobs in prev than cur
+  else if (prev_frame.prev_number_of_blobs>cur_frame.number_of_blobs) {
+    // left off here
+  }
+
+  // case where they are equally numbered
+
+  // case where there are more blobs in cur than prev
 }

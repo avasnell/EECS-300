@@ -13,7 +13,7 @@ const int LED_BUILTIN = 2;
 #define DOT_VALUE 28
 
 //how many pixels need to be above threshold to count as a person
-#define PIXEL_COUNT_THRESHOLD 40
+#define PIXEL_COUNT_THRESHOLD 20
 
 
 bool already_found = false;
@@ -129,8 +129,8 @@ void readBlobs_from_Frame() {
   static Frame frame;
 
   frame.matrix_of_temps = &temp_values;
-  frame.blobs = get_Blobs(frame);
   frame.hot_pixels_count = area(temp_values);
+  frame.blobs = get_Blobs(frame);
   frame.number_of_blobs = frame.blobs.size();
 
   Serial.print("Number of blobs: ");
