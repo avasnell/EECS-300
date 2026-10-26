@@ -172,12 +172,27 @@ Blob which_blob (Blob blob) {
     // verify that this vector has the updated blob age
   }
 
+  ///////////////////////////////////////////////////// this is highkey incorrect. keep in mind we only take in ONE blob. or adjust to take in a vector of blobs.
   // case where there are more blobs in prev than cur
   else if (prev_frame.prev_number_of_blobs>cur_frame.number_of_blobs) {
-    // left off here
+    vector<Blob> compare_queue = cur_frame.blobs;
+    for (int ind=0; ind<cur_frame.number_of_blobs; ind++) {
+      vector<float> distances;
+
+      // compare to each old blob
+      for(int prev_ind=0; ind<prev_frame.prev_number_of_blobs; ind++) {
+        distances[ind] = sqrt(pow(compare_queue[ind].centroid_x - prev_frame.prev_blobs[prev_ind].centroid_x, 2) + pow(compare_queue[ind].centroid_y - prev_frame.prev_blobs[prev_ind].centroid_y, 2));
+      }
+
+      closest = min_element(distances.begin(), distances.end()); //////// return a pointer to min here
+      ///// do the assignment here
+    }
   }
 
   // case where they are equally numbered
+  else if(prev_frame.prev_number_of_blobs==cur_frame.number_of_blobs){
+    
+  }
 
   // case where there are more blobs in cur than prev
 }
