@@ -13,7 +13,7 @@ typedef struct{
 } Pixel;
 
 typedef struct {
-  uint8_t id; //tracker id
+  string id; //tracker id
   float centroid_x; //center x position
   float centroid_y; //center y position
   float max_temp; //max temp of blob
@@ -44,6 +44,7 @@ typedef struct{
     int count;
 } Counter;
 
+void print_vector_of_Blobs(vector<Blob> vector_blobs);
 bool track_blob_direction (int previous_x_cent, int current_x_cent);
 vector<Blob> get_Blobs(const Frame& frame);
 Blob find_Blob(bool (&visited)[24][32], int startR, int startC, const Frame& frame);
@@ -52,5 +53,6 @@ uint8_t max_temp(int tempValues[24][32]);
 bool same_person(Blob blob1, Blob blob2);
 float x_centroid(int tempValues[24][32]);
 float y_centroid(int tempValues[24][32]);
-Blob which_blob(Blob blob);
+vector<Blob> which_blob(vector<Blob> blobs, const Frame& cur_frame, const Prev_Frame& prev_frame);
+void map_blob_pixels_to_matrix(std::vector<Pixel> pixels, int (&mapped_matrix)[24][32]);
 #endif

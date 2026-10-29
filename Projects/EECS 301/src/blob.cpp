@@ -11,6 +11,31 @@ using namespace std;
 #define PIXEL_HEAT_THRESHOLD 30
 
 
+void print_vector_of_Blobs(vector<Blob> vector_blobs){
+  for(int i = 0; i < vector_blobs.size(); i++){
+    Serial.print("------------Blob_");
+    Serial.print(vector_blobs[i].id.c_str());
+    Serial.print("------------");
+    Serial.println();
+    Serial.print("id: ");
+    Serial.println(vector_blobs[i].id.c_str());
+    Serial.print(vector_blobs[i].id.c_str());
+    Serial.print("_age: ");
+    Serial.println(vector_blobs[i].age);
+    Serial.print(vector_blobs[i].id.c_str());
+    Serial.print("_x centroid: ");
+    Serial.println(vector_blobs[i].centroid_x);
+    Serial.print(vector_blobs[i].id.c_str());
+    Serial.print("_y centroid: ");
+    Serial.println(vector_blobs[i].centroid_y);
+    Serial.print(vector_blobs[i].id.c_str());
+    Serial.print("_max temp: ");
+    Serial.println(vector_blobs[i].max_temp);
+    Serial.print(vector_blobs[i].id.c_str());
+    Serial.print("_area: ");
+    Serial.println(vector_blobs[i].area);
+  }
+}
 
 vector<Blob> get_Blobs(const Frame& frame){
   //id number gets defined when creating the vector of blobs
@@ -73,10 +98,11 @@ Blob find_Blob(bool (&visited)[24][32], int startR, int startC, const Frame& fra
             }
         }
     }
-    
-    blob.matrix_just_blob = map_blob_pixels_to_matrix(blob.pixels);
+    int blob_matrix[24][32];
+    map_blob_pixels_to_matrix(blob.pixels, blob_matrix);
+    blob.matrix_just_blob = &blob_matrix;
     int area = blob.pixels.size();
-    float x_centroidd = x_centroid(*blob.matrix_just_blob);
+    float x_centroidd =x_centroid(*blob.matrix_just_blob);
     float y_centroidd = y_centroid(*blob.matrix_just_blob);
     float max_tempp = max_temp(*blob.matrix_just_blob);
     blob.area = area;
@@ -87,20 +113,23 @@ Blob find_Blob(bool (&visited)[24][32], int startR, int startC, const Frame& fra
 }
 
 //
-auto map_blob_pixels_to_matrix(std::vector<Pixel> pixels) -> int (*)[24][32] {
-  int (*mapped_matrix)[24][32] = {0};
+void map_blob_pixels_to_matrix(std::vector<Pixel> pixels, int (&mapped_matrix)[24][32]){
+  for (int r = 0; r < 24; r++) {
+    for (int c = 0; c < 32; c++) {
+      mapped_matrix[r][c] = 0;
+    }
+  }
   for (int r = 0; r < 24; r++){
     for (int c = 0; c < 32; c++){
       for (int i = 0; i < pixels.size(); i++){
         if (pixels[i].row ==  r && pixels[i].col == c){
-          (*mapped_matrix)[r][c] = PIXEL_HEAT_THRESHOLD;
+          (mapped_matrix)[r][c] = PIXEL_HEAT_THRESHOLD;
         } else {
-          (*mapped_matrix)[r][c] = 0;
+          (mapped_matrix)[r][c] = 0;
         }
       }
     }
   }
-  return mapped_matrix;
 }
 
 //find area of blob
@@ -237,9 +266,9 @@ vector<Blob> which_blob(vector<Blob> blobs, const Frame& cur_frame, const Prev_F
     }
 }
 
-//determine if blob is headiing in enter direction or exit direction
-//1 is enter and 0 is exit
-bool track_blob_direction_and_count (vector<Blob> blobs, const Frame& cur_frame, const Prev_Frame& prev_frame, Counter increment) {
+//determine if blob is heading in enter direction or exit direction
+//1 is enter, 0 is exit, 0.5 is stagnant
+int track_blob_direction_and_count (vector<Blob> blobs, const Frame& cur_frame, const Prev_Frame& prev_frame, Counter counter) {
   vector<Blob> current_blobs = which_blob(blobs, cur_frame, prev_frame);
   vector<Blob> past_blobs = prev_frame.prev_blobs;
 
@@ -256,14 +285,14 @@ bool track_blob_direction_and_count (vector<Blob> blobs, const Frame& cur_frame,
   for(int i = 0; i < usable_size; i++){
     float y_centroid_past = past_blobs[i].centroid_y;
     float y_centroid_current = current_blobs[i].centroid_y;
-    int count = increment.count;
+    int count = counter.count;
     if (y_centroid_current > y_centroid_past){
       if(count > 0){
          count -=1;
       } 
     }
 
-    if(y_centroid_current < y_centroid_past){
+    if (y_centroid_current < y_centroid_past){
       count += 1;
     }
   }

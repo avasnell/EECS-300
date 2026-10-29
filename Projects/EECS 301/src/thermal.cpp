@@ -5,6 +5,11 @@
 #include "thermal.h"
 #include "blob.h"
 #include <vector>
+#include <iostream>
+#include <fstream>
+#include <queue>
+#include <string>
+
 
 #define EMMISIVITY 0.95
 #define TA_SHIFT 8 
@@ -30,6 +35,12 @@ Blob blob_current = {0, 0, 0, 0, 0, 0};
 paramsMLX90640 mlx90640;
 const byte MLX90640_address = 0x33; //Default 7-bit unshifted address of the MLX90640
 static float tempValues[32 * 24];
+
+vector<Blob> blobs;
+int (*matrix_just_blob)[24][32];
+
+Frame current_frame = {0,blobs, 0, matrix_just_blob};
+Prev_Frame previous_frame = {0,blobs, 0, matrix_just_blob};
 
 void thermalsetup() {
     
@@ -102,6 +113,14 @@ void readTempValues() {
 }
 
 void readBlobs_from_Frame() {
+//make ID queue
+queue<string> idQueue;
+ifstream file("ids.txt");
+string line;
+
+while (getline(file, line)) {
+    idQueue.push(line); 
+}
   int pixel_count=0;
   for (byte x = 0 ; x < 2 ; x++) 
   {
@@ -126,17 +145,24 @@ void readBlobs_from_Frame() {
   convertTempValuesToGrid(temp_values, tempValues);
 
 
-  static Frame frame;
+  current_frame.matrix_of_temps = &temp_values;
+  current_frame.hot_pixels_count = area(temp_values);
+  current_frame.blobs = get_Blobs(current_frame);
+  current_frame.number_of_blobs = current_frame.blobs.size();
+  current_frame.previous_frame = previous_frame;
 
-  frame.matrix_of_temps = &temp_values;
-  frame.hot_pixels_count = area(temp_values);
-  frame.blobs = get_Blobs(frame);
-  frame.number_of_blobs = frame.blobs.size();
+  vector<Blob> which_blobs;
+  which_blobs = which_blob(current_frame.blobs, current_frame, previous_frame);
 
+  print_vector_of_Blobs(current_frame.blobs);
+
+  Serial.println();
+  Serial.println();
   Serial.print("Number of blobs: ");
-    Serial.println(frame.number_of_blobs);
+    Serial.println(current_frame.number_of_blobs);
   Serial.print("Hot pixels count: ");
-    Serial.println(frame.hot_pixels_count);
+    Serial.println(current_frame.hot_pixels_count);
+
 
   for (int i = 0; i < 768; i++) {
     
@@ -152,6 +178,10 @@ void readBlobs_from_Frame() {
     Serial.print(" ");
   }
   blob_previous = blob_current;
+  previous_frame.prev_matrix_of_temps = current_frame.matrix_of_temps;
+  previous_frame.prev_hot_pixels_count = current_frame.hot_pixels_count;
+  previous_frame.prev_blobs = current_frame.blobs;
+  previous_frame.prev_number_of_blobs = current_frame.number_of_blobs;
 }
 
 void readTemp_and_PrintOutput() {
