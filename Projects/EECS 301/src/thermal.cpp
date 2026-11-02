@@ -32,15 +32,17 @@ bool person_IR=false;
 Blob blob_previous = {0, 0, 0, 0, 0, 0};
 Blob blob_current = {0, 0, 0, 0, 0, 0};
 
+static int temp_values[24][32];
+
 paramsMLX90640 mlx90640;
 const byte MLX90640_address = 0x33; //Default 7-bit unshifted address of the MLX90640
 static float tempValues[32 * 24];
 
 vector<Blob> blobs;
-int (*matrix_just_blob)[24][32];
+int matrix_just_blob[24][32];
 
-Frame current_frame = {0,blobs, 0, matrix_just_blob};
-Prev_Frame previous_frame = {0,blobs, 0, matrix_just_blob};
+Frame current_frame = {0,blobs, 0, &matrix_just_blob};
+Prev_Frame previous_frame = {0,blobs, 0, &matrix_just_blob};
 
 void thermalsetup() {
     
@@ -114,13 +116,6 @@ void readTempValues() {
 
 void readBlobs_from_Frame() {
 //make ID queue
-queue<string> idQueue;
-ifstream file("ids.txt");
-string line;
-
-while (getline(file, line)) {
-    idQueue.push(line); 
-}
   int pixel_count=0;
   for (byte x = 0 ; x < 2 ; x++) 
   {
@@ -141,9 +136,8 @@ while (getline(file, line)) {
   }
   Serial.println("\r\n===========================WaveShare MLX90640 Thermal Camera===============================");
   //create blob from temp_values and print out blob info
-  static int temp_values[24][32];
+  
   convertTempValuesToGrid(temp_values, tempValues);
-
 
   current_frame.matrix_of_temps = &temp_values;
   current_frame.hot_pixels_count = area(temp_values);
@@ -154,7 +148,8 @@ while (getline(file, line)) {
   vector<Blob> which_blobs;
   which_blobs = which_blob(current_frame.blobs, current_frame, previous_frame);
 
-  print_vector_of_Blobs(current_frame.blobs);
+  //print_vector_of_Blobs(current_frame.blobs);
+  print_vector_of_Blobs(which_blobs);
 
   Serial.println();
   Serial.println();

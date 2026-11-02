@@ -13,7 +13,7 @@ typedef struct{
 } Pixel;
 
 typedef struct {
-  string id; //tracker id
+  int id; //tracker id
   float centroid_x; //center x position
   float centroid_y; //center y position
   float max_temp; //max temp of blob

@@ -9,29 +9,30 @@ using namespace std;
 
 #define PIXEL_COUNT_THRESHOLD 20
 #define PIXEL_HEAT_THRESHOLD 30
+#define MIN_DISTANCE_TO_BE_SAME_PERSON 4
 
 
 void print_vector_of_Blobs(vector<Blob> vector_blobs){
   for(int i = 0; i < vector_blobs.size(); i++){
     Serial.print("------------Blob_");
-    Serial.print(vector_blobs[i].id.c_str());
+    Serial.print(vector_blobs[i].id);
     Serial.print("------------");
     Serial.println();
     Serial.print("id: ");
-    Serial.println(vector_blobs[i].id.c_str());
-    Serial.print(vector_blobs[i].id.c_str());
+    Serial.println(vector_blobs[i].id);
+    Serial.print(vector_blobs[i].id);
     Serial.print("_age: ");
     Serial.println(vector_blobs[i].age);
-    Serial.print(vector_blobs[i].id.c_str());
+    Serial.print(vector_blobs[i].id);
     Serial.print("_x centroid: ");
     Serial.println(vector_blobs[i].centroid_x);
-    Serial.print(vector_blobs[i].id.c_str());
+    Serial.print(vector_blobs[i].id);
     Serial.print("_y centroid: ");
     Serial.println(vector_blobs[i].centroid_y);
-    Serial.print(vector_blobs[i].id.c_str());
+    Serial.print(vector_blobs[i].id);
     Serial.print("_max temp: ");
     Serial.println(vector_blobs[i].max_temp);
-    Serial.print(vector_blobs[i].id.c_str());
+    Serial.print(vector_blobs[i].id);
     Serial.print("_area: ");
     Serial.println(vector_blobs[i].area);
   }
@@ -201,6 +202,9 @@ float y_centroid (int tempValues[24][32]){
 }
 
 vector<Blob> which_blob(vector<Blob> blobs, const Frame& cur_frame, const Prev_Frame& prev_frame){
+
+    //return vector
+    vector<Blob> return_Blobs;
    
     //map to store ID value of blobs in previous frame and their corresponding distances to blobs in current frame
     std::map<uint8_t, std::vector<float>> distances;
@@ -239,24 +243,49 @@ vector<Blob> which_blob(vector<Blob> blobs, const Frame& cur_frame, const Prev_F
         }
       }
 
-      //go through and find the closest current blob to each previous blob and assign the IDs of the previous blobs to the current blobs
-      vector<Blob> return_Blobs;
+      //track what's already been assigned to avoid duplicates
+      std::vector<uint8_t> assigned_indices;
+
+      //find what the next new ID should be based on the max ID in the previous frame
+      int max_id = 0;
+      for (int i = 0; i < prev_frame.prev_blobs.size(); i++){
+        if (prev_frame.prev_blobs[i].id > max_id){
+          max_id = prev_frame.prev_blobs[i].id;
+        }
+      }
+      int next_new_id = max_id + 1;
+
+      //loop through the distances and assign IDs to the current blobs based on the closest previous blob
       for (int i = 0; i < distances.size(); i++){
         float min_distance = distances[i][0];
         int min_index = 0;
         for (int j = 1; j <distances[i].size(); j++){
            float distance_compare = distances[i][j];
-           if(distance_compare < min_distance){
-            min_distance = distance_compare;
-            min_index = j;
-           }
-        
-        Blob push_back_Blob;
-        push_back_Blob.id = blobs[min_index].id;
 
-        push_back_Blob.age = blobs[min_index].age++;
+           // Check if past index 'j' is already in our assigned vector
+            bool already_assigned = (find(assigned_indices.begin(), assigned_indices.end(), j) != assigned_indices.end());
+
+            if (!already_assigned && distance_compare < min_distance) {
+                min_distance = distance_compare;
+                min_index = j;
+            }
+        
+        Blob push_back_Blob = blobs[i];
+        //min_distance threshold of for what's considered same person and new
+        if (min_index != -1 && min_distance < MIN_DISTANCE_TO_BE_SAME_PERSON) { 
+            push_back_Blob.id = prev_frame.prev_blobs[min_index].id;
+            push_back_Blob.age = prev_frame.prev_blobs[min_index].age + 1;
+            
+            // Mark this past blob index as taken
+            assigned_indices.push_back(min_index);
+        } else {
+            // It's a completely new person entering the frame
+            push_back_Blob.id = next_new_id++;
+            push_back_Blob.age = 1;
+        }
         
         return_Blobs.push_back(push_back_Blob);  
+    } 
         }
 
       }
@@ -264,7 +293,6 @@ vector<Blob> which_blob(vector<Blob> blobs, const Frame& cur_frame, const Prev_F
       
       return return_Blobs;
     }
-}
 
 //determine if blob is heading in enter direction or exit direction
 //1 is enter, 0 is exit, 0.5 is stagnant
@@ -296,89 +324,5 @@ int track_blob_direction_and_count (vector<Blob> blobs, const Frame& cur_frame, 
       count += 1;
     }
   }
-  
-  
-  
-  
-  
+
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/*
-// take in a blob and identify based on closest centroid of previous frame
-Blob which_blob (Blob blob) {
-  Frame cur_frame;
-  Prev_Frame prev_frame;
-  float current_x = blob.centroid_x;
-  float current_y = blob.centroid_y;
-
-  // if there's only one blob in both current and previous, assume they are the same
-  if (cur_frame.number_of_blobs == 1 && prev_frame.prev_number_of_blobs == 1) {
-    blob.age++;
-    return cur_frame.blobs[0]; // verify that the only blob is in index 0
-    // verify that this vector has the updated blob age
-  }
-
-  ///////////////////////////////////////////////////// this is highkey incorrect. keep in mind we only take in ONE blob. or adjust to take in a vector of blobs.
-  // case where there are more blobs in prev than cur
-  else if (prev_frame.prev_number_of_blobs>cur_frame.number_of_blobs) {
-    vector<Blob> compare_queue = cur_frame.blobs;
-    for (int ind=0; ind<cur_frame.number_of_blobs; ind++) {
-      vector<float> distances;
-
-      // compare to each old blob
-      for(int prev_ind=0; ind<prev_frame.prev_number_of_blobs; ind++) {
-        distances[ind] = sqrt(pow(compare_queue[ind].centroid_x - prev_frame.prev_blobs[prev_ind].centroid_x, 2) + pow(compare_queue[ind].centroid_y - prev_frame.prev_blobs[prev_ind].centroid_y, 2));
-      }
-
-      closest = min_element(distances.begin(), distances.end()); //////// return a pointer to min here
-      ///// do the assignment here
-    }
-  }
-
-  // case where they are equally numbered
-  else if(prev_frame.prev_number_of_blobs==cur_frame.number_of_blobs){
-    
-  }
-
-  // case where there are more blobs in cur than prev
-}
-  */
