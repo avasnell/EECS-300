@@ -24,13 +24,12 @@ const int LED_BUILTIN = 2;
 bool already_found = false;
 bool detected = false;
 bool prev_detected = false;
-int counter = 0;
 int pixel_count=0;
 bool person_thermal=false;
 bool person_IR=false;
 
-Blob blob_previous = {0, 0, 0, 0, 0, 0};
-Blob blob_current = {0, 0, 0, 0, 0, 0};
+//intialize counter
+Counter counter = {0};
 
 static int temp_values[24][32];
 
@@ -145,11 +144,16 @@ void readBlobs_from_Frame() {
   current_frame.number_of_blobs = current_frame.blobs.size();
   current_frame.previous_frame = previous_frame;
 
+
   vector<Blob> which_blobs;
   which_blobs = which_blob(current_frame.blobs, current_frame, previous_frame);
+  current_frame.blobs = which_blobs;
 
-  //print_vector_of_Blobs(current_frame.blobs);
-  print_vector_of_Blobs(which_blobs);
+  //track_blob_direction_and_count(current_frame.blobs, current_frame, previous_frame, counter);
+  print_vector_of_Blobs(current_frame.blobs);
+  counter.count = count_people_entered(current_frame.blobs, current_frame.previous_frame.prev_blobs, counter.count);
+  Serial.println();
+  Serial.println("Count: " + String(counter.count));
 
   Serial.println();
   Serial.println();
@@ -172,13 +176,14 @@ void readBlobs_from_Frame() {
     }
     Serial.print(" ");
   }
-  blob_previous = blob_current;
+
+ 
   previous_frame.prev_matrix_of_temps = current_frame.matrix_of_temps;
   previous_frame.prev_hot_pixels_count = current_frame.hot_pixels_count;
   previous_frame.prev_blobs = current_frame.blobs;
   previous_frame.prev_number_of_blobs = current_frame.number_of_blobs;
 }
-
+/*
 void readTemp_and_PrintOutput() {
   int pixel_count=0;
   for (byte x = 0 ; x < 2 ; x++) 
@@ -272,7 +277,7 @@ void readTemp_and_PrintPixCt() {
     /*if (((i % 32) == 0) && (i != 0)) {
       Serial.println(" ");
     }
-    */
+    
     if(((int)tempValues[i]) > DOT_VALUE){
       //Serial.print(("*"));
       pixel_count++;
@@ -286,7 +291,7 @@ void readTemp_and_PrintPixCt() {
   Serial.println(pixel_count);
   //Serial.println("\r\n===========================WaveShare MLX90640 Thermal Camera===============================");
 }
-
+*/
 void Device_Scan() {
   byte error, address;
   int nDevices;

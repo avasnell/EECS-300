@@ -3,13 +3,14 @@
 #include <cstdint>
 #include <queue>
 #include <map>
+#include <algorithm>
 
 
 using namespace std;
 
 #define PIXEL_COUNT_THRESHOLD 20
 #define PIXEL_HEAT_THRESHOLD 30
-#define MIN_DISTANCE_TO_BE_SAME_PERSON 4
+#define MIN_DISTANCE_TO_BE_SAME_PERSON 10
 
 
 void print_vector_of_Blobs(vector<Blob> vector_blobs){
@@ -35,6 +36,12 @@ void print_vector_of_Blobs(vector<Blob> vector_blobs){
     Serial.print(vector_blobs[i].id);
     Serial.print("_area: ");
     Serial.println(vector_blobs[i].area);
+    Serial.print(vector_blobs[i].id);
+    Serial.print("_first_x centroid: ");
+    Serial.println(vector_blobs[i].first_centroid_x);
+    Serial.print(vector_blobs[i].id);
+    Serial.print("_first_y centroid: ");
+    Serial.println(vector_blobs[i].first_centroid_y);
   }
 }
 
@@ -61,7 +68,7 @@ vector<Blob> get_Blobs(const Frame& frame){
 
 //Breadth-first search to find a blob starting from a given pixel
 Blob find_Blob(bool (&visited)[24][32], int startR, int startC, const Frame& frame){
-     Blob blob = {0, 0, 0, 0, 0, 0};
+     Blob blob;
 
      //if empty, return empty blob
     if (frame.hot_pixels_count == 0){
@@ -200,104 +207,139 @@ float y_centroid (int tempValues[24][32]){
   if (sum_mass == 0) return 0;
   return sum_weight_y / sum_mass;
 }
-
+  
 vector<Blob> which_blob(vector<Blob> blobs, const Frame& cur_frame, const Prev_Frame& prev_frame){
+  vector<Blob> return_Blobs;
 
-    //return vector
-    vector<Blob> return_Blobs;
-   
-    //map to store ID value of blobs in previous frame and their corresponding distances to blobs in current frame
-    std::map<uint8_t, std::vector<float>> distances;
-
-    //if there is only one blob in both current and previous frame, assume they are the same blob
-    if (cur_frame.number_of_blobs == 1 && prev_frame.prev_number_of_blobs == 1) {
-      Blob blob = cur_frame.blobs[0];
-      blob.age++;
-      return blobs;
-    } else {
-      
-      //store centroids of current and previous blobs in vectors
-      vector<std::pair<float,float>> current_centroids;
-      for (int i = 0; i < blobs.size(); i++){
-            Blob current_blob = blobs[i];
-            std::pair<float, float> centroids;
-            centroids.first = current_blob.centroid_x;
-            centroids.second = current_blob.centroid_y;
-            current_centroids.push_back(centroids);
-          }
-      
-      vector<std::pair<float,float>> past_centroids;
-      for(int i = 0; i < prev_frame.prev_blobs.size(); i++){
-        Blob current_blob = prev_frame.prev_blobs[i];
-        std::pair<float, float> centroids;
-        centroids.first = current_blob.centroid_x;
-        centroids.second =current_blob.centroid_y;
-        past_centroids.push_back(centroids);
-      }
-
-      //calculate distances between current and previous centroids and store in map
-      for(int i = 0; i < current_centroids.size(); i++){
-        for(int j = 0; j < past_centroids.size(); j++){
-          float distance = sqrt(pow(current_centroids[i].first - past_centroids[j].first, 2) + pow(current_centroids[i].second - past_centroids[j].second, 2));
-          distances[i].push_back(distance);
-        }
-      }
-
-      //track what's already been assigned to avoid duplicates
-      std::vector<uint8_t> assigned_indices;
-
-      //find what the next new ID should be based on the max ID in the previous frame
-      int max_id = 0;
-      for (int i = 0; i < prev_frame.prev_blobs.size(); i++){
-        if (prev_frame.prev_blobs[i].id > max_id){
-          max_id = prev_frame.prev_blobs[i].id;
-        }
-      }
-      int next_new_id = max_id + 1;
-
-      //loop through the distances and assign IDs to the current blobs based on the closest previous blob
-      for (int i = 0; i < distances.size(); i++){
-        float min_distance = distances[i][0];
-        int min_index = 0;
-        for (int j = 1; j <distances[i].size(); j++){
-           float distance_compare = distances[i][j];
-
-           // Check if past index 'j' is already in our assigned vector
-            bool already_assigned = (find(assigned_indices.begin(), assigned_indices.end(), j) != assigned_indices.end());
-
-            if (!already_assigned && distance_compare < min_distance) {
-                min_distance = distance_compare;
-                min_index = j;
-            }
-        
-        Blob push_back_Blob = blobs[i];
-        //min_distance threshold of for what's considered same person and new
-        if (min_index != -1 && min_distance < MIN_DISTANCE_TO_BE_SAME_PERSON) { 
-            push_back_Blob.id = prev_frame.prev_blobs[min_index].id;
-            push_back_Blob.age = prev_frame.prev_blobs[min_index].age + 1;
-            
-            // Mark this past blob index as taken
-            assigned_indices.push_back(min_index);
-        } else {
-            // It's a completely new person entering the frame
-            push_back_Blob.id = next_new_id++;
-            push_back_Blob.age = 1;
-        }
-        
-        return_Blobs.push_back(push_back_Blob);  
-    } 
-        }
-
-      }
-      
-      
+  // Safety fallback: if there are no current blobs, return immediately
+  if (blobs.empty()) {
       return return_Blobs;
-    }
+  }
 
+  // If there is exactly 1 blob now and 1 blob before, link them directly
+  if (cur_frame.number_of_blobs == 1 && prev_frame.prev_number_of_blobs == 1) {
+    blobs[0].id = prev_frame.prev_blobs[0].id;
+    blobs[0].age = prev_frame.prev_blobs[0].age + 1; 
+    blobs[0].first_centroid_x = prev_frame.prev_blobs[0].first_centroid_x;
+    blobs[0].first_centroid_y = prev_frame.prev_blobs[0].first_centroid_y;
+    return blobs;
+  } 
+    
+  // Store current centroids
+  vector<std::pair<float,float>> current_centroids;
+  for (size_t i = 0; i < blobs.size(); i++){
+      current_centroids.push_back({blobs[i].centroid_x, blobs[i].centroid_y});
+  }
+    
+  // Store past centroids
+  vector<std::pair<float,float>> past_centroids;
+  for(size_t i = 0; i < prev_frame.prev_blobs.size(); i++){
+      past_centroids.push_back({prev_frame.prev_blobs[i].centroid_x, prev_frame.prev_blobs[i].centroid_y});
+  }
+
+  // Calculate distance matrix
+  std::map<uint8_t, std::vector<float>> distances;
+  for(size_t i = 0; i < current_centroids.size(); i++){
+      for(size_t j = 0; j < past_centroids.size(); j++){
+        float distance = sqrt(pow(current_centroids[i].first - past_centroids[j].first, 2) + 
+                              pow(current_centroids[i].second - past_centroids[j].second, 2));
+        distances[i].push_back(distance);
+      }
+  }
+
+  std::vector<uint8_t> assigned_indices;
+
+  // Find the next available new ID
+  int max_id = 0;
+  for (size_t i = 0; i < prev_frame.prev_blobs.size(); i++){
+      if (prev_frame.prev_blobs[i].id > max_id){
+        max_id = prev_frame.prev_blobs[i].id;
+      }
+  }
+  int next_new_id = max_id + 1;
+
+  // Loop through each current blob
+  for (size_t i = 0; i < current_centroids.size(); i++){
+      float min_distance = 999999.0f;
+      int min_index = -1;
+
+      // only calculate tracking matches if history elements actually exist
+      if (!past_centroids.empty() && !distances[i].empty()) {
+          min_distance = distances[i][0];
+          min_index = 0;
+
+          for (size_t j = 1; j < distances[i].size(); j++){
+              float distance_compare = distances[i][j];
+              bool already_assigned = (find(assigned_indices.begin(), assigned_indices.end(), j) != assigned_indices.end());
+
+              if (!already_assigned && distance_compare < min_distance) {
+                  min_distance = distance_compare;
+                  min_index = j;
+              }
+          }
+      }
+      
+      // push back the blob with the appropriate ID and age
+      Blob push_back_Blob = blobs[i];
+
+      if (min_index != -1 && min_distance < MIN_DISTANCE_TO_BE_SAME_PERSON) { 
+          push_back_Blob.id = prev_frame.prev_blobs[min_index].id;
+          push_back_Blob.age = prev_frame.prev_blobs[min_index].age + 1;
+          assigned_indices.push_back(min_index);
+          push_back_Blob.first_centroid_x = prev_frame.prev_blobs[min_index].first_centroid_x;
+          push_back_Blob.first_centroid_y = prev_frame.prev_blobs[min_index].first_centroid_y;
+      } else {
+        //new person entering the frame
+          push_back_Blob.id = next_new_id++;
+          push_back_Blob.age = 0; 
+          push_back_Blob.first_centroid_x = push_back_Blob.centroid_x;
+          push_back_Blob.first_centroid_y = push_back_Blob.centroid_y;
+
+      }
+      
+      return_Blobs.push_back(push_back_Blob);  
+  }
+    
+  return return_Blobs;
+}
+
+
+int count_people_entered(vector<Blob> current_blobs, vector<Blob> past_blobs, int count){
+  //Loop through past blobs to see who disappeared
+  for(size_t i = 0; i < past_blobs.size(); i++){
+    int target_id = past_blobs[i].id;
+    
+    //distance a centroid must hit to consider exit or entering, this is a threshold to avoid counting people who are just moving around in the frame
+    int threshold_distance_1 = 25;
+    int threshold_distance_2 = 6;
+    
+    //Check if this past person is still present in the current frame
+    bool found_in_current = (std::find_if(current_blobs.begin(), current_blobs.end(), 
+                             [target_id](const Blob& b) { return b.id == target_id; }) != current_blobs.end());
+    
+    //If they were there before, but are gone now, they exited or entered completely
+    if (!found_in_current) {
+      if((past_blobs[i].centroid_y >= threshold_distance_1) && (past_blobs[i].first_centroid_y <= threshold_distance_2)){
+        count -= 1; //Person disappeared near the top (Exited)
+      } else if((past_blobs[i].centroid_y <= threshold_distance_2) && (past_blobs[i].first_centroid_y >= threshold_distance_1)) {
+        count += 1; //Person disappeared near the bottom (Entered)
+      } else {
+        count =+ 0;
+      }
+    }
+  }
+  
+  // Return the total count only AFTER examining every single blob
+  return count;
+}
+
+
+/*
 //determine if blob is heading in enter direction or exit direction
 //1 is enter, 0 is exit, 0.5 is stagnant
 int track_blob_direction_and_count (vector<Blob> blobs, const Frame& cur_frame, const Prev_Frame& prev_frame, Counter counter) {
   vector<Blob> current_blobs = which_blob(blobs, cur_frame, prev_frame);
+  print_vector_of_Blobs(current_blobs);
   vector<Blob> past_blobs = prev_frame.prev_blobs;
 
   uint8_t usable_size = 0;
@@ -324,5 +366,7 @@ int track_blob_direction_and_count (vector<Blob> blobs, const Frame& cur_frame, 
       count += 1;
     }
   }
-
+  Serial.println("Count: " + String(counter.count));
+  return counter.count;
 }
+  */
