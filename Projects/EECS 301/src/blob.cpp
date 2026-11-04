@@ -9,8 +9,10 @@
 using namespace std;
 
 #define PIXEL_COUNT_THRESHOLD 20
-#define PIXEL_HEAT_THRESHOLD 30
-#define MIN_DISTANCE_TO_BE_SAME_PERSON 10
+#define PIXEL_HEAT_THRESHOLD 26
+#define MIN_DISTANCE_TO_BE_SAME_PERSON 15
+#define THRESHOLD_DISTANCE_1 28
+#define THRESHOLD_DISTANCE_2 10
 
 
 void print_vector_of_Blobs(vector<Blob> vector_blobs){
@@ -65,7 +67,7 @@ vector<Blob> get_Blobs(const Frame& frame){
     return blobs;
 }
 
-
+/*
 //Breadth-first search to find a blob starting from a given pixel
 Blob find_Blob(bool (&visited)[24][32], int startR, int startC, const Frame& frame){
      Blob blob;
@@ -89,6 +91,7 @@ Blob find_Blob(bool (&visited)[24][32], int startR, int startC, const Frame& fra
 
         //add current pixel to blob and add to visited
         blob.pixels.push_back(current_pixel);
+        blob.area++;
         visited[current_pixel.row][current_pixel.col] = true;
 
         //check diagonals and adjacent pixels
@@ -118,7 +121,7 @@ Blob find_Blob(bool (&visited)[24][32], int startR, int startC, const Frame& fra
     blob.centroid_y = y_centroidd;
     blob.max_temp = max_tempp;
     return blob;
-}
+}*/
 
 //
 void map_blob_pixels_to_matrix(std::vector<Pixel> pixels, int (&mapped_matrix)[24][32]){
@@ -310,8 +313,8 @@ int count_people_entered(vector<Blob> current_blobs, vector<Blob> past_blobs, in
     int target_id = past_blobs[i].id;
     
     //distance a centroid must hit to consider exit or entering, this is a threshold to avoid counting people who are just moving around in the frame
-    int threshold_distance_1 = 25;
-    int threshold_distance_2 = 6;
+  int threshold_distance_1 = THRESHOLD_DISTANCE_1;
+    int threshold_distance_2 = THRESHOLD_DISTANCE_2;
     
     //Check if this past person is still present in the current frame
     bool found_in_current = (std::find_if(current_blobs.begin(), current_blobs.end(), 
@@ -319,6 +322,7 @@ int count_people_entered(vector<Blob> current_blobs, vector<Blob> past_blobs, in
     
     //If they were there before, but are gone now, they exited or entered completely
     if (!found_in_current) {
+      Serial.println("Looking at person with ID: " + String(past_blobs[i].id));
       if((past_blobs[i].centroid_y >= threshold_distance_1) && (past_blobs[i].first_centroid_y <= threshold_distance_2)){
         count -= 1; //Person disappeared near the top (Exited)
       } else if((past_blobs[i].centroid_y <= threshold_distance_2) && (past_blobs[i].first_centroid_y >= threshold_distance_1)) {
