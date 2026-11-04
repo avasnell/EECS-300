@@ -20,7 +20,7 @@ typedef struct {
   uint16_t area; //area of blob
   uint8_t age; //how many frames the blob has been there
   vector<Pixel> pixels; //pixels that make upS the blob
-  bool direction; //true if entering, false if exiting
+  uint8_t frames_lost;
   int (*matrix_just_blob)[24][32];
   double first_centroid_x = -1; //first x position of blob
   double first_centroid_y = -1; //first y position of blob

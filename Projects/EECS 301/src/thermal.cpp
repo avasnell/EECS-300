@@ -15,7 +15,7 @@
 #define TA_SHIFT 8 
 const int LED_BUILTIN = 2;
 
-#define DOT_VALUE 26
+#define DOT_VALUE 25
 
 //how many pixels need to be above threshold to count as a person
 #define PIXEL_COUNT_THRESHOLD 20
@@ -63,7 +63,7 @@ void thermalsetup() {
   if (status != 0) Serial.println("Failed to load system parameters");
   status = MLX90640_ExtractParameters(eeMLX90640, &mlx90640);
   if (status != 0) Serial.println("Parameter extraction failed");
-  MLX90640_SetRefreshRate(MLX90640_address, 0x03); 
+  MLX90640_SetRefreshRate(MLX90640_address, 0x01); 
   Wire.setClock(800000);
 }
 

@@ -8,11 +8,13 @@
 
 using namespace std;
 
-#define PIXEL_COUNT_THRESHOLD 20
-#define PIXEL_HEAT_THRESHOLD 26
-#define MIN_DISTANCE_TO_BE_SAME_PERSON 15
-#define THRESHOLD_DISTANCE_1 28
-#define THRESHOLD_DISTANCE_2 10
+#define PIXEL_COUNT_THRESHOLD 50
+#define PIXEL_HEAT_THRESHOLD 25
+#define THRESHOLD_DISTANCE_BOTTOM 3
+#define THRESHOLD_DISTANCE_TOP 29
+#define MAX_TRACKING_DISTANCE 17.0f
+
+#define FRAME_PERSISTENCE_LIMIT 4 //Keep a lost Blob alive for _ frames
 
 
 void print_vector_of_Blobs(vector<Blob> vector_blobs){
@@ -66,35 +68,39 @@ vector<Blob> get_Blobs(const Frame& frame){
     }
     return blobs;
 }
-
-/*
-//Breadth-first search to find a blob starting from a given pixel
+// Fixed BFS Blob Finder without stack-pointer bugs
 Blob find_Blob(bool (&visited)[24][32], int startR, int startC, const Frame& frame){
-     Blob blob;
-
-     //if empty, return empty blob
-    if (frame.hot_pixels_count == 0){
-        return blob;
-    }
+    Blob blob;
+    blob.area = 0;
+    blob.frames_lost = 0;
     
-    //queue for BFS
+    if (frame.hot_pixels_count == 0) return blob;
+    
     std::queue<Pixel> q;    
-    Pixel start_pixel = {startR, startC}; 
-    q.push(start_pixel);
-
+    q.push({startR, startC});
     visited[startR][startC] = true;
 
+    float sum_weight_x = 0;
+    float sum_weight_y = 0;
+    float sum_mass = 0;
+    uint8_t max_t = 0;
+
     while (!q.empty()){
-        //make current pixel the front of queue and pop it
         Pixel current_pixel = q.front();
         q.pop();
 
-        //add current pixel to blob and add to visited
         blob.pixels.push_back(current_pixel);
         blob.area++;
-        visited[current_pixel.row][current_pixel.col] = true;
 
-        //check diagonals and adjacent pixels
+        // Calculate centroids and max temperature inline during BFS to prevent 
+        // secondary loop over-allocation and dangling stack matrix bugs.
+        int val = (*frame.matrix_of_temps)[current_pixel.row][current_pixel.col];
+        if (val > max_t) max_t = val;
+        
+        sum_weight_x += val * current_pixel.row;
+        sum_weight_y += val * current_pixel.col;
+        sum_mass += val;
+
         const int dr[] = {-1, -1, -1,  0, 0,  1, 1, 1};
         const int dc[] = {-1,  0,  1, -1, 1, -1, 0, 1};
       
@@ -109,19 +115,17 @@ Blob find_Blob(bool (&visited)[24][32], int startR, int startC, const Frame& fra
             }
         }
     }
-    int blob_matrix[24][32];
-    map_blob_pixels_to_matrix(blob.pixels, blob_matrix);
-    blob.matrix_just_blob = &blob_matrix;
-    int area = blob.pixels.size();
-    float x_centroidd =x_centroid(*blob.matrix_just_blob);
-    float y_centroidd = y_centroid(*blob.matrix_just_blob);
-    float max_tempp = max_temp(*blob.matrix_just_blob);
-    blob.area = area;
-    blob.centroid_x = x_centroidd;
-    blob.centroid_y = y_centroidd;
-    blob.max_temp = max_tempp;
+
+    if (sum_mass > 0) {
+        blob.centroid_x = sum_weight_x / sum_mass;
+        blob.centroid_y = sum_weight_y / sum_mass;
+    } else {
+        blob.centroid_x = 0;
+        blob.centroid_y = 0;
+    }
+    blob.max_temp = max_t;
     return blob;
-}*/
+}
 
 //
 void map_blob_pixels_to_matrix(std::vector<Pixel> pixels, int (&mapped_matrix)[24][32]){
@@ -210,7 +214,123 @@ float y_centroid (int tempValues[24][32]){
   if (sum_mass == 0) return 0;
   return sum_weight_y / sum_mass;
 }
+
+static vector<Blob> tracked_history;
+static int dynamic_id_pool = 1;
+vector<Blob> which_blob(vector<Blob> detected_blobs, const Frame& cur_frame, const Prev_Frame& prev_frame){
+  //create list of currently tracked blobs
+  vector<Blob> current_tracked_list;
+  // people have found a seat
+  //has blob been linked to old ID value (links)
+  vector<bool> detected_matched(detected_blobs.size(), false);
+  // seats are taken
+  //has historical blob been matched up with blob (prevents multiple current blobs from matching to same historical blob)
+  vector<bool> history_matched(tracked_history.size(), false);
+
+
+  //start iterating through detected blobs
+  for (size_t i = 0; i < detected_blobs.size(); i++) {
+    float min_dist = 999999.0f;
+    int best_history_idx = -1;
+
+    // current blobs look for matches in historical blobs
+    for (size_t j = 0; j < tracked_history.size(); j++) {
+      //skip already matched history blobs
+      if (history_matched[j]) continue;
+
+      float dist = sqrt(pow(detected_blobs[i].centroid_x - tracked_history[j].centroid_x, 2) + 
+                        pow(detected_blobs[i].centroid_y - tracked_history[j].centroid_y, 2));
+      
+      if (dist < min_dist) {
+        min_dist = dist;
+        best_history_idx = j;
+      }
+    }
+
   
+    // if a match was found in historical blobs and distance is less than max_tracking to be considred a blob, transfer info
+    if (best_history_idx != -1 && min_dist < MAX_TRACKING_DISTANCE) {
+      Blob matched_blob = detected_blobs[i];
+      matched_blob.id = tracked_history[best_history_idx].id;
+      matched_blob.age = tracked_history[best_history_idx].age + 1;
+      matched_blob.frames_lost = 0; // Reset dropout timer
+      
+      matched_blob.first_centroid_x = tracked_history[best_history_idx].first_centroid_x;
+      matched_blob.first_centroid_y = tracked_history[best_history_idx].first_centroid_y;
+
+      current_tracked_list.push_back(matched_blob);
+      //mark that detected blob has been matched and that histroical blob has been matched
+      detected_matched[i] = true;
+      history_matched[best_history_idx] = true;
+      
+      // Update history values in place
+      tracked_history[best_history_idx] = matched_blob;
+    }
+  }
+
+  //For and additional blobs that didn't get matched
+  for (size_t j = 0; j < tracked_history.size(); j++) {
+  if (!history_matched[j]) {
+    //keep track of how many frames the blob has been missing for
+    tracked_history[j].frames_lost++;
+    
+    //if under the limit, still push to list of current blobs
+    if (tracked_history[j].frames_lost <= FRAME_PERSISTENCE_LIMIT) {
+      current_tracked_list.push_back(tracked_history[j]);
+    }
+  }
+}
+
+for (size_t i = 0; i < detected_blobs.size(); i++) {
+  if (!detected_matched[i]) {
+    Blob new_blob = detected_blobs[i];
+    new_blob.id = dynamic_id_pool++; // Pull next unique integer from the continuous pool
+    new_blob.age = 0;
+    new_blob.frames_lost = 0;
+    
+    // Anchor their starting gate position permanently right now
+    new_blob.first_centroid_x = new_blob.centroid_x;
+    new_blob.first_centroid_y = new_blob.centroid_y;
+
+    current_tracked_list.push_back(new_blob);
+    tracked_history.push_back(new_blob); // Seed into history for next frames
+  }
+}
+
+//remove hsitroical blobs that have been lost for too long from the tracked history
+tracked_history.erase(
+    remove_if(tracked_history.begin(), tracked_history.end(), 
+              [](const Blob& b) { return b.frames_lost > FRAME_PERSISTENCE_LIMIT; }), 
+    tracked_history.end()
+  );
+
+  return current_tracked_list;
+}
+
+int count_people_entered(vector<Blob> current_blobs, vector<Blob> past_blobs, int current_count){
+  // Check if any tracked blob has crossed state boundary rules before erasing from history pool
+  for(size_t j = 0; j < tracked_history.size(); j++) {
+    // We only process crossing checks right before a blob is about to expire from frame dropout
+    if (tracked_history[j].frames_lost == FRAME_PERSISTENCE_LIMIT) {
+       float start_y = tracked_history[j].first_centroid_y;
+       float end_y = tracked_history[j].centroid_y;
+
+       // Filter noise: Check that a clear path across the grid occurred
+       if (start_y <= THRESHOLD_DISTANCE_TOP && end_y >= THRESHOLD_DISTANCE_BOTTOM) {
+           current_count += 1; // Top-to-Bottom Entry
+           Serial.println("-> Person Entered Frame!");
+       } 
+       else if (start_y >= THRESHOLD_DISTANCE_BOTTOM && end_y <= THRESHOLD_DISTANCE_TOP) {
+           current_count -= 1; // Bottom-to-Top Exit
+           Serial.println("<- Person Exited Frame!");
+       }
+    }
+  }
+  return current_count;
+}
+
+
+/*
 vector<Blob> which_blob(vector<Blob> blobs, const Frame& cur_frame, const Prev_Frame& prev_frame){
   vector<Blob> return_Blobs;
 
@@ -304,9 +424,9 @@ vector<Blob> which_blob(vector<Blob> blobs, const Frame& cur_frame, const Prev_F
   }
     
   return return_Blobs;
-}
+}*/
 
-
+/*
 int count_people_entered(vector<Blob> current_blobs, vector<Blob> past_blobs, int count){
   //Loop through past blobs to see who disappeared
   for(size_t i = 0; i < past_blobs.size(); i++){
@@ -335,7 +455,7 @@ int count_people_entered(vector<Blob> current_blobs, vector<Blob> past_blobs, in
   
   // Return the total count only AFTER examining every single blob
   return count;
-}
+}*/
 
 
 /*
