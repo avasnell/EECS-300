@@ -4,6 +4,7 @@
 #include "MLX_files/MLX90640_I2C_Driver.h"
 
 void thermalsetup();
+void calculate_baseline();
 void thermalloop(void); 
 void readTempValues();
 void readTemp_and_PrintOutput();

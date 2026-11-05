@@ -8,13 +8,14 @@
 
 using namespace std;
 
-#define PIXEL_COUNT_THRESHOLD 50
-#define PIXEL_HEAT_THRESHOLD 25
-#define THRESHOLD_DISTANCE_BOTTOM 3
-#define THRESHOLD_DISTANCE_TOP 29
+#define PIXEL_COUNT_THRESHOLD 40
+#define PIXEL_HEAT_THRESHOLD 2
+#define THRESHOLD_DISTANCE_BOTTOM 20
+
+#define THRESHOLD_DISTANCE_TOP 12
 #define MAX_TRACKING_DISTANCE 17.0f
 
-#define FRAME_PERSISTENCE_LIMIT 4 //Keep a lost Blob alive for _ frames
+#define FRAME_PERSISTENCE_LIMIT 1 //Keep a lost Blob alive for _ frames
 
 
 void print_vector_of_Blobs(vector<Blob> vector_blobs){
@@ -46,6 +47,9 @@ void print_vector_of_Blobs(vector<Blob> vector_blobs){
     Serial.print(vector_blobs[i].id);
     Serial.print("_first_y centroid: ");
     Serial.println(vector_blobs[i].first_centroid_y);
+    Serial.print(vector_blobs[i].id);
+    Serial.print("_frames_lost: ");
+    Serial.println(vector_blobs[i].frames_lost);
   }
 }
 
@@ -216,12 +220,12 @@ float y_centroid (int tempValues[24][32]){
 }
 
 static vector<Blob> tracked_history;
-static int dynamic_id_pool = 1;
+static int id_value = 1;
 vector<Blob> which_blob(vector<Blob> detected_blobs, const Frame& cur_frame, const Prev_Frame& prev_frame){
   //create list of currently tracked blobs
   vector<Blob> current_tracked_list;
   // people have found a seat
-  //has blob been linked to old ID value (links)
+  //has blob been linked to old ID value 
   vector<bool> detected_matched(detected_blobs.size(), false);
   // seats are taken
   //has historical blob been matched up with blob (prevents multiple current blobs from matching to same historical blob)
@@ -253,7 +257,7 @@ vector<Blob> which_blob(vector<Blob> detected_blobs, const Frame& cur_frame, con
       Blob matched_blob = detected_blobs[i];
       matched_blob.id = tracked_history[best_history_idx].id;
       matched_blob.age = tracked_history[best_history_idx].age + 1;
-      matched_blob.frames_lost = 0; // Reset dropout timer
+      matched_blob.frames_lost = 0; //reset timer
       
       matched_blob.first_centroid_x = tracked_history[best_history_idx].first_centroid_x;
       matched_blob.first_centroid_y = tracked_history[best_history_idx].first_centroid_y;
@@ -284,7 +288,7 @@ vector<Blob> which_blob(vector<Blob> detected_blobs, const Frame& cur_frame, con
 for (size_t i = 0; i < detected_blobs.size(); i++) {
   if (!detected_matched[i]) {
     Blob new_blob = detected_blobs[i];
-    new_blob.id = dynamic_id_pool++; // Pull next unique integer from the continuous pool
+    new_blob.id = id_value++; 
     new_blob.age = 0;
     new_blob.frames_lost = 0;
     
@@ -293,7 +297,7 @@ for (size_t i = 0; i < detected_blobs.size(); i++) {
     new_blob.first_centroid_y = new_blob.centroid_y;
 
     current_tracked_list.push_back(new_blob);
-    tracked_history.push_back(new_blob); // Seed into history for next frames
+    tracked_history.push_back(new_blob); 
   }
 }
 
@@ -308,14 +312,13 @@ tracked_history.erase(
 }
 
 int count_people_entered(vector<Blob> current_blobs, vector<Blob> past_blobs, int current_count){
-  // Check if any tracked blob has crossed state boundary rules before erasing from history pool
   for(size_t j = 0; j < tracked_history.size(); j++) {
-    // We only process crossing checks right before a blob is about to expire from frame dropout
+    // process crossing checks right before a blob is about to expire from frame dropout
     if (tracked_history[j].frames_lost == FRAME_PERSISTENCE_LIMIT) {
        float start_y = tracked_history[j].first_centroid_y;
        float end_y = tracked_history[j].centroid_y;
 
-       // Filter noise: Check that a clear path across the grid occurred
+  
        if (start_y <= THRESHOLD_DISTANCE_TOP && end_y >= THRESHOLD_DISTANCE_BOTTOM) {
            current_count += 1; // Top-to-Bottom Entry
            Serial.println("-> Person Entered Frame!");

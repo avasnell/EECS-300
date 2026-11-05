@@ -16,9 +16,15 @@
 const int LED_BUILTIN = 2;
 
 #define DOT_VALUE 25
+#define ABOVE_BASELINE 14
 
 //how many pixels need to be above threshold to count as a person
 #define PIXEL_COUNT_THRESHOLD 20
+
+//calibration variables
+static float background_baseline[24][32] = {0};
+float baseline = 0;
+static float calibration_frames = 30;
 
 
 bool already_found = false;
@@ -48,7 +54,7 @@ void thermalsetup() {
   Serial.begin(115200);
   pinMode(LED_BUILTIN, OUTPUT);
   Wire.begin();
-  Wire.setClock(400000); 
+  //Wire.setClock(400000); 
   Wire.beginTransmission((uint8_t)MLX90640_address);
   if (Wire.endTransmission() != 0) {
     Serial.println("MLX90640 not detected at default I2C address. Starting scan the device addr...");
@@ -63,15 +69,16 @@ void thermalsetup() {
   if (status != 0) Serial.println("Failed to load system parameters");
   status = MLX90640_ExtractParameters(eeMLX90640, &mlx90640);
   if (status != 0) Serial.println("Parameter extraction failed");
-  MLX90640_SetRefreshRate(MLX90640_address, 0x01); 
-  Wire.setClock(800000);
+  MLX90640_SetRefreshRate(MLX90640_address, 0x05); // 0x05 = 8Hz, 0x04 = 4Hz, 0x03 = 2Hz, 0x02 = 1Hz
+  Wire.setClock(400000);
+  calculate_baseline();
 }
 
 void thermalloop(void) {
   //readTempValues();
   //readTemp_and_PrintOutput();
   readBlobs_from_Frame();
-  delay(20);
+ 
 }
 
 void readTempValues() {
@@ -107,14 +114,56 @@ void readTempValues() {
     }
     
   }
-  /////////////////////////////////////////// IMPLEMENT COUNTER
+
   already_found=false;
   digitalWrite(LED_BUILTIN, LOW);
   Serial.println("\r\n===========================WaveShare MLX90640 Thermal Camera===============================");
 }
 
+
+float get_average_of_framee(){
+  static uint16_t mlx90640Frame[834];
+  for (byte x = 0; x < 2; x++) 
+  {
+    int status = MLX90640_GetFrameData(MLX90640_address, mlx90640Frame);
+    if (status < 0) {
+      Serial.print("GetFrame Error: ");
+      Serial.println(status);
+    }
+  }
+
+  // 2. Perform the intensive math ONLY ONCE per full frame
+  float vdd = MLX90640_GetVdd(mlx90640Frame, &mlx90640);
+  float Ta = MLX90640_GetTa(mlx90640Frame, &mlx90640);
+  float tr = Ta - TA_SHIFT; 
+
+  // This fills your 768-element global array 'tempValues' with actual Celsius data
+  MLX90640_CalculateTo(mlx90640Frame, &mlx90640, EMMISIVITY, tr, tempValues);
+
+  Serial.println("\r\n===========================WaveShare MLX90640 Thermal Camera===============================");
+
+  float total_temp = 0;
+  for (int i = 0; i < 768; i++) {
+    total_temp += tempValues[i];
+  }
+
+  return (total_temp / 768.0f);
+
+
+}
+
+void calculate_baseline(){
+  float average_of_all_frames = 0;
+  for(int i = 0; i<calibration_frames; i++){
+    average_of_all_frames += get_average_of_framee();
+  }
+  baseline= average_of_all_frames/calibration_frames;
+  Serial.println("baseline: " + String(baseline));
+  Serial.println("-------------------------------------------------Calibration complete-------------------------------------------------");
+
+}
+
 void readBlobs_from_Frame() {
-//make ID queue
   int pixel_count=0;
   for (byte x = 0 ; x < 2 ; x++) 
   {
@@ -161,7 +210,8 @@ void readBlobs_from_Frame() {
     Serial.println(current_frame.number_of_blobs);
   Serial.print("Hot pixels count: ");
     Serial.println(current_frame.hot_pixels_count);
-
+Serial.println("Baseline:" + String(baseline));
+Serial.println("Threshold: " + String(baseline + ABOVE_BASELINE));
 
   for (int i = 0; i < 768; i++) {
     
@@ -169,9 +219,9 @@ void readBlobs_from_Frame() {
       Serial.println(" ");
     }
     
-    if(((int)tempValues[i]) > DOT_VALUE){
+    if(tempValues[i] > baseline + ABOVE_BASELINE){
       Serial.print(("*"));
-    } else {
+    } else{
       Serial.print(" ");
     }
     Serial.print(" ");
@@ -183,6 +233,7 @@ void readBlobs_from_Frame() {
   previous_frame.prev_blobs = current_frame.blobs;
   previous_frame.prev_number_of_blobs = current_frame.number_of_blobs;
 }
+
 /*
 void readTemp_and_PrintOutput() {
   int pixel_count=0;
@@ -330,10 +381,10 @@ void Device_Scan() {
 
 //blob functions take [32][24] array of temp values and tempValues from MLX90640 is an array of 768 values
 //so need to convert tempValues to [32][24] array
-void convertTempValuesToGrid(int tempValues[24][32], float tempValuesFloat[32*24]) {
+void convertTempValuestoArray(int tempValues[24][32], float tempValuesFloat[32*24]) { ////////////// duplicate function. investigate later
   for (int row = 0; row < 24; row++) {
     for (int col = 0; col < 32; col++) {
-        if (((int)tempValuesFloat[row * 32 + col]) > DOT_VALUE) {
+        if (((int)tempValuesFloat[row * 32 + col]) > baseline + ABOVE_BASELINE) {
             tempValues[row][col] = (int)tempValuesFloat[row * 32 + col];
         } else {
             tempValues[row][col] = 0;
@@ -342,14 +393,22 @@ void convertTempValuesToGrid(int tempValues[24][32], float tempValuesFloat[32*24
   }
 }
 
-//convert [32][24] array of temp values to tempValues array of 768 values (used in Blob.cpp)
-void convertTempValuestoArray(float tempValuesFloat[32*24], int tempValues[24][32]) {
+//blob functions take [32][24] array of temp values and tempValues from MLX90640 is an array of 768 values
+//so need to convert tempValues to [32][24] array
+void convertTempValuesToGrid(int tempValues[24][32], float tempValuesFloat[32*24]) {
   for (int row = 0; row < 24; row++) {
     for (int col = 0; col < 32; col++) {
-        tempValuesFloat[row * 32 + col] = (float)tempValues[col][row];
+        int temp = (int)tempValuesFloat[row * 32 + col];
+
+        if(temp > (baseline + ABOVE_BASELINE)) {
+            tempValues[row][col] = temp;
+        } else {
+            tempValues[row][col] = 0;
+        }
     }
   }
 }
+
 
 bool person_detected() {
   return person_thermal;
