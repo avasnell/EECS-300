@@ -72,7 +72,7 @@ vector<Blob> get_Blobs(const Frame& frame){
     }
     return blobs;
 }
-// Fixed BFS Blob Finder without stack-pointer bugs
+//BFS
 Blob find_Blob(bool (&visited)[24][32], int startR, int startC, const Frame& frame){
     Blob blob;
     blob.area = 0;
