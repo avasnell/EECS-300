@@ -58,6 +58,7 @@ float x_centroid(int tempValues[24][32]);
 float y_centroid(int tempValues[24][32]);
 vector<Blob> which_blob(vector<Blob> blobs, const Frame& cur_frame, const Prev_Frame& prev_frame);
 void map_blob_pixels_to_matrix(std::vector<Pixel> pixels, int (&mapped_matrix)[24][32]);
+void compute_max_area(Blob blob);
 //int track_blob_direction_and_count (vector<Blob> blobs, const Frame& cur_frame, const Prev_Frame& prev_frame, Counter counter);
 int count_people_entered(vector<Blob> current_blobs, vector<Blob> past_blobs, int count);
 #endif
