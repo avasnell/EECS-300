@@ -9,11 +9,13 @@
 using namespace std;
 
 #define PIXEL_COUNT_THRESHOLD 40
+#define PIXEL_COUNT_THRESHOLD_UPPER 220
 #define PIXEL_HEAT_THRESHOLD 2
 #define THRESHOLD_DISTANCE_BOTTOM 20
 
+
 #define THRESHOLD_DISTANCE_TOP 12
-#define MAX_TRACKING_DISTANCE 17.0f
+#define MAX_TRACKING_DISTANCE 17.0
 
 #define FRAME_PERSISTENCE_LIMIT 1 //Keep a lost Blob alive for _ frames
 
@@ -64,6 +66,7 @@ vector<Blob> get_Blobs(const Frame& frame){
                 Blob blob = find_Blob(visited, r, c, frame); 
                 if (blob.area > PIXEL_COUNT_THRESHOLD){
                     blob.id = id_number;
+                    compute_max_area(blob);
                     id_number++;
                     blobs.push_back(blob);
                 }
@@ -317,14 +320,17 @@ int count_people_entered(vector<Blob> current_blobs, vector<Blob> past_blobs, in
     if (tracked_history[j].frames_lost == FRAME_PERSISTENCE_LIMIT) {
        float start_y = tracked_history[j].first_centroid_y;
        float end_y = tracked_history[j].centroid_y;
-
+      int people = 1;
+      if (tracked_history[j].max_area > PIXEL_COUNT_THRESHOLD_UPPER) {
+        people = 2;
+      }
   
        if (start_y <= THRESHOLD_DISTANCE_TOP && end_y >= THRESHOLD_DISTANCE_BOTTOM) {
-           current_count += 1; // Top-to-Bottom Entry
+           current_count += people; // Top-to-Bottom Entry
            Serial.println("-> Person Entered Frame!");
        } 
        else if (start_y >= THRESHOLD_DISTANCE_BOTTOM && end_y <= THRESHOLD_DISTANCE_TOP) {
-           current_count -= 1; // Bottom-to-Top Exit
+           current_count -= people; // Bottom-to-Top Exit
            Serial.println("<- Person Exited Frame!");
        }
     }
@@ -332,6 +338,10 @@ int count_people_entered(vector<Blob> current_blobs, vector<Blob> past_blobs, in
   return current_count;
 }
 
+void compute_max_area(Blob blob) {
+  int cur_max = blob.max_area;
+  if (blob.area>blob.max_area) { blob.max_area = blob.area; }
+}
 
 /*
 vector<Blob> which_blob(vector<Blob> blobs, const Frame& cur_frame, const Prev_Frame& prev_frame){

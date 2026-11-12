@@ -18,6 +18,7 @@ typedef struct {
   float centroid_y; //center y position
   float max_temp; //max temp of blob
   uint16_t area; //area of blob
+  uint16_t max_area=0; //max area of blob in its history
   uint8_t age; //how many frames the blob has been there
   vector<Pixel> pixels; //pixels that make upS the blob
   uint8_t frames_lost;
