@@ -9,7 +9,6 @@
 using namespace std;
 
 #define PIXEL_COUNT_THRESHOLD 40
-#define PIXEL_HEAT_THRESHOLD 2
 #define THRESHOLD_DISTANCE_BOTTOM 20
 
 #define THRESHOLD_DISTANCE_TOP 12
@@ -20,8 +19,8 @@ using namespace std;
 
 #define FRAME_PERSISTENCE_LIMIT 1 //Keep a lost Blob alive for _ frames
 
-#define PIXEL_COUNT_THRESHOLD_UPPER 220//blobs bigger than this get split by local maxima
-#define MIN_PEAK_SEPARATION 5.0f//peaks closer than this many pixels count as one person
+#define PIXEL_COUNT_THRESHOLD_UPPER 220
+#define MIN_PEAK_SEPARATION 20.0f//peaks closer than this many pixels count as one person
 
 void print_vector_of_Blobs(vector<Blob> vector_blobs){
   for(int i = 0; i < vector_blobs.size(); i++){
@@ -274,94 +273,6 @@ Blob find_Blob(bool (&visited)[24][32], int startR, int startC, const Frame& fra
     return blob;
 }
 
-//
-void map_blob_pixels_to_matrix(std::vector<Pixel> pixels, int (&mapped_matrix)[24][32]){
-  for (int r = 0; r < 24; r++) {
-    for (int c = 0; c < 32; c++) {
-      mapped_matrix[r][c] = 0;
-    }
-  }
-  for (int r = 0; r < 24; r++){
-    for (int c = 0; c < 32; c++){
-      for (int i = 0; i < pixels.size(); i++){
-        if (pixels[i].row ==  r && pixels[i].col == c){
-          (mapped_matrix)[r][c] = PIXEL_HEAT_THRESHOLD;
-        } else {
-          (mapped_matrix)[r][c] = 0;
-        }
-      }
-    }
-  }
-}
-
-//find area of blob
-uint16_t area(int tempValues[24][32]){
-  uint16_t area = 0;
-  for (int row = 0; row < 24; row++){
-    for (int col = 0; col < 32; col++){
-      if (tempValues[row][col] > 0){
-        area++;
-      }
-    }
-  }
-  return area;
-}
-
-//find max temp of blob
-uint8_t max_temp(int tempValues[24][32]){
-  uint8_t max_temp = 0;
-  for (int row = 0; row < 24; row++){
-    for (int col = 0; col < 32 ; col++){
-      if (tempValues[row][col] > max_temp){
-        max_temp = tempValues[row][col];
-      }
-    }
-  }
-  return max_temp;
-} 
-
-//compare two blobs to see if they are the same person
-//if the distance between the two blobs is less than 2, they are considered the same person
-bool same_person(Blob blob1, Blob blob2){
-  float distance = sqrt(pow(blob1.centroid_x - blob2.centroid_x, 2) + pow(blob1.centroid_y - blob2.centroid_y, 2));
-  if (distance < 2.0){
-    return true;
-  }
-  return false;
-}
-
-//take x_centroid of blob
-// going through everything is inefficent, plan to fix
-float x_centroid (int tempValues[24][32]){
-  float sum_weight_x = 0;
-  float sum_mass = 0;
-
-  for (int row = 0; row < 24; row++){
-    for (int col = 0; col < 32; col++){
-      int val = tempValues[row][col];
-      sum_weight_x += val *row;
-      sum_mass += val;
-    }
-  }
-  if (sum_mass == 0) return 0;
-  return sum_weight_x / sum_mass;
-}
-
-//y_centroid
-float y_centroid (int tempValues[24][32]){
-  float sum_weight_y = 0;
-  float sum_mass = 0;
-  for (int row = 0; row < 24; row++){
-    for (int col = 0; col < 32; col++){
-      int val = tempValues[row][col];
-      sum_weight_y += val *col;
-      sum_mass += val;
-    }
-  }
-  if (sum_mass == 0) return 0;
-  return sum_weight_y / sum_mass;
-}
-
 static vector<Blob> tracked_history;
 static int id_value = 1;
 vector<Blob> which_blob(vector<Blob> detected_blobs, const Frame& cur_frame, const Prev_Frame& prev_frame){
@@ -396,7 +307,7 @@ vector<Blob> which_blob(vector<Blob> detected_blobs, const Frame& cur_frame, con
     // if a match was found in historical blobs and distance is less than max_tracking to be considred a blob, transfer info
     //if (best_history_idx != -1 && min_dist < MAX_TRACKING_DISTANCE) {
 
-    //fast walker-one blob seen last frame, one new blob and the jump continues
+    //fast walker- one blob seen last frame, one new blob and the jump continues
     //in the direction the blob was heading (started left, moving right and vice versa)
     float tracking_distance = MAX_TRACKING_DISTANCE;
     if(best_history_idx != -1 && detected_blobs.size() == 1 && tracked_history.size() == 1){
@@ -449,7 +360,6 @@ for (size_t i = 0; i < detected_blobs.size(); i++) {
     new_blob.age = 0;
     new_blob.frames_lost = 0;
     
-    // Anchor their starting gate position permanently right now
     new_blob.first_centroid_x = new_blob.centroid_x;
     new_blob.first_centroid_y = new_blob.centroid_y;
 
