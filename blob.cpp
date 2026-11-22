@@ -8,14 +8,14 @@
 
 using namespace std;
 
-#define PIXEL_COUNT_THRESHOLD 40
+#define PIXEL_COUNT_THRESHOLD 25
 #define THRESHOLD_DISTANCE_BOTTOM 20
 
 #define THRESHOLD_DISTANCE_TOP 12
 #define MAX_TRACKING_DISTANCE 17.0f
 
 //only used for single person trials
-#define SINGLE_BLOB_TRACKING_DISTANCE 22.0f
+#define SINGLE_BLOB_TRACKING_DISTANCE 24.0f
 
 #define FRAME_PERSISTENCE_LIMIT 1 //Keep a lost Blob alive for _ frames
 
