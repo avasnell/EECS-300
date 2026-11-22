@@ -16,10 +16,10 @@
 const int LED_BUILTIN = 2;
 
 #define DOT_VALUE 25
-#define ABOVE_BASELINE 14
+#define ABOVE_BASELINE 2
 
 //how many pixels need to be above threshold to count as a person
-#define PIXEL_COUNT_THRESHOLD 20
+#define PIXEL_COUNT_THRESHOLD 15
 
 //calibration variables
 static float background_baseline[24][32] = {0};
@@ -40,7 +40,7 @@ Counter counter = {0};
 static int temp_values[24][32];
 
 paramsMLX90640 mlx90640;
-const byte MLX90640_address = 0x33; //Default 7-bit unshifted address of the MLX90640
+const uint8_t MLX90640_address = 0x33; //Default 7-bit unshifted address of the MLX90640
 static float tempValues[32 * 24];
 
 vector<Blob> blobs;
@@ -51,7 +51,8 @@ Prev_Frame previous_frame = {0,blobs, 0, &matrix_just_blob};
 
 void thermalsetup() {
     
-  Serial.begin(115200);
+  //Serial.begin(115200);
+  Serial.begin(921600);
   pinMode(LED_BUILTIN, OUTPUT);
   Wire.begin();
   //Wire.setClock(400000); 
@@ -82,7 +83,7 @@ void thermalloop(void) {
 }
 
 void readTempValues() {
-  for (byte x = 0 ; x < 2 ; x++) 
+  for (uint8_t x = 0 ; x < 2 ; x++) 
   {
     uint16_t mlx90640Frame[834];
     int status = MLX90640_GetFrameData(MLX90640_address, mlx90640Frame);
@@ -99,7 +100,7 @@ void readTempValues() {
 
     MLX90640_CalculateTo(mlx90640Frame, &mlx90640, EMMISIVITY, tr, tempValues);
   }
-  Serial.println("\r\n===========================WaveShare MLX90640 Thermal Camera===============================");
+  //Serial.println("\r\n===========================WaveShare MLX90640 Thermal Camera===============================");
   for (int i = 0; i < 768; i++) {
     if (((i % 32) == 0) && (i != 0)) {
       Serial.println(" ");
@@ -117,20 +118,20 @@ void readTempValues() {
 
   already_found=false;
   digitalWrite(LED_BUILTIN, LOW);
-  Serial.println("\r\n===========================WaveShare MLX90640 Thermal Camera===============================");
+  //Serial.println("\r\n===========================WaveShare MLX90640 Thermal Camera===============================");
 }
 
 
 float get_average_of_framee(){
   static uint16_t mlx90640Frame[834];
-  for (byte x = 0; x < 2; x++) 
+  for (uint8_t x = 0; x < 2; x++) 
   {
     int status = MLX90640_GetFrameData(MLX90640_address, mlx90640Frame);
     if (status < 0) {
       Serial.print("GetFrame Error: ");
       Serial.println(status);
     }
-  }
+  //}
 
   // 2. Perform the intensive math ONLY ONCE per full frame
   float vdd = MLX90640_GetVdd(mlx90640Frame, &mlx90640);
@@ -139,8 +140,9 @@ float get_average_of_framee(){
 
   // This fills your 768-element global array 'tempValues' with actual Celsius data
   MLX90640_CalculateTo(mlx90640Frame, &mlx90640, EMMISIVITY, tr, tempValues);
+  }//moved bracket to fix baseline function
 
-  Serial.println("\r\n===========================WaveShare MLX90640 Thermal Camera===============================");
+  //Serial.println("\r\n===========================WaveShare MLX90640 Thermal Camera===============================");
 
   float total_temp = 0;
   for (int i = 0; i < 768; i++) {
@@ -165,7 +167,7 @@ void calculate_baseline(){
 
 void readBlobs_from_Frame() {
   int pixel_count=0;
-  for (byte x = 0 ; x < 2 ; x++) 
+  for (uint8_t x = 0 ; x < 2 ; x++) 
   {
     static uint16_t mlx90640Frame[834];
     int status = MLX90640_GetFrameData(MLX90640_address, mlx90640Frame);
@@ -174,14 +176,14 @@ void readBlobs_from_Frame() {
       Serial.print("GetFrame Error: ");
       Serial.println(status);
     }
-
+   //} moved bracket to fix baseline bug
     float vdd = MLX90640_GetVdd(mlx90640Frame, &mlx90640);
     float Ta = MLX90640_GetTa(mlx90640Frame, &mlx90640);
 
     float tr = Ta - TA_SHIFT; 
 
     MLX90640_CalculateTo(mlx90640Frame, &mlx90640, EMMISIVITY, tr, tempValues);
-  }
+  }//moved bracket to here to fix baseline
   Serial.println("\r\n===========================WaveShare MLX90640 Thermal Camera===============================");
   //create blob from temp_values and print out blob info
   
@@ -213,7 +215,7 @@ void readBlobs_from_Frame() {
 Serial.println("Baseline:" + String(baseline));
 Serial.println("Threshold: " + String(baseline + ABOVE_BASELINE));
 
-  for (int i = 0; i < 768; i++) {
+  /*for (int i = 0; i < 768; i++) {
     
     if (((i % 32) == 0) && (i != 0)) {
       Serial.println(" ");
@@ -225,7 +227,17 @@ Serial.println("Threshold: " + String(baseline + ABOVE_BASELINE));
       Serial.print(" ");
     }
     Serial.print(" ");
+  }*/
+
+  // Live view for Python Heatmap (pure comma-separated values)
+  Serial.print("FRAME,");
+  for (int i=0; i < 768; i++) {
+    Serial.print(tempValues[i], 2); // Send with 2 decimal places
+    if (i < 767) {
+      Serial.print(",");
+    }
   }
+  Serial.println(); // Newline triggers Python to render the frame
 
  
   previous_frame.prev_matrix_of_temps = current_frame.matrix_of_temps;
@@ -344,7 +356,7 @@ void readTemp_and_PrintPixCt() {
 }
 */
 void Device_Scan() {
-  byte error, address;
+  uint8_t error, address;
   int nDevices;
   Serial.println("Scanning...");
   nDevices = 0;
