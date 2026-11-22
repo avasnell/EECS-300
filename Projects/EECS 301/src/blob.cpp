@@ -9,11 +9,13 @@
 using namespace std;
 
 #define PIXEL_COUNT_THRESHOLD 40
+#define PIXEL_COUNT_THRESHOLD_UPPER 220
 #define PIXEL_HEAT_THRESHOLD 2
 #define THRESHOLD_DISTANCE_BOTTOM 20
 
+
 #define THRESHOLD_DISTANCE_TOP 12
-#define MAX_TRACKING_DISTANCE 17.0f
+#define MAX_TRACKING_DISTANCE 17.0
 
 #define FRAME_PERSISTENCE_LIMIT 1 //Keep a lost Blob alive for _ frames
 
@@ -50,6 +52,9 @@ void print_vector_of_Blobs(vector<Blob> vector_blobs){
     Serial.print(vector_blobs[i].id);
     Serial.print("_frames_lost: ");
     Serial.println(vector_blobs[i].frames_lost);
+    Serial.print(vector_blobs[i].id);
+    Serial.print("_max_area: ");
+    Serial.println(vector_blobs[i].max_area);
   }
 }
 
@@ -72,7 +77,7 @@ vector<Blob> get_Blobs(const Frame& frame){
     }
     return blobs;
 }
-//BFS
+// Fixed BFS Blob Finder without stack-pointer bugs
 Blob find_Blob(bool (&visited)[24][32], int startR, int startC, const Frame& frame){
     Blob blob;
     blob.area = 0;
@@ -257,6 +262,14 @@ vector<Blob> which_blob(vector<Blob> detected_blobs, const Frame& cur_frame, con
       Blob matched_blob = detected_blobs[i];
       matched_blob.id = tracked_history[best_history_idx].id;
       matched_blob.age = tracked_history[best_history_idx].age + 1;
+      if (tracked_history[best_history_idx].area>tracked_history[best_history_idx].max_area) {
+        matched_blob.max_area = tracked_history[best_history_idx].area;
+        //Serial.println("max area updated: "+String(matched_blob.max_area));
+      }
+      else {
+        matched_blob.max_area = tracked_history[best_history_idx].max_area;
+        //Serial.println("too small, max area: "+String(matched_blob.max_area));
+      }
       matched_blob.frames_lost = 0; //reset timer
       
       matched_blob.first_centroid_x = tracked_history[best_history_idx].first_centroid_x;
@@ -317,14 +330,17 @@ int count_people_entered(vector<Blob> current_blobs, vector<Blob> past_blobs, in
     if (tracked_history[j].frames_lost == FRAME_PERSISTENCE_LIMIT) {
        float start_y = tracked_history[j].first_centroid_y;
        float end_y = tracked_history[j].centroid_y;
-
+      int people = 1;
+      if (tracked_history[j].max_area > PIXEL_COUNT_THRESHOLD_UPPER) {
+        people = 2;
+      }
   
        if (start_y <= THRESHOLD_DISTANCE_TOP && end_y >= THRESHOLD_DISTANCE_BOTTOM) {
-           current_count += 1; // Top-to-Bottom Entry
+           current_count += people; // Top-to-Bottom Entry
            Serial.println("-> Person Entered Frame!");
        } 
        else if (start_y >= THRESHOLD_DISTANCE_BOTTOM && end_y <= THRESHOLD_DISTANCE_TOP) {
-           current_count -= 1; // Bottom-to-Top Exit
+           current_count -= people; // Bottom-to-Top Exit
            Serial.println("<- Person Exited Frame!");
        }
     }
@@ -332,6 +348,11 @@ int count_people_entered(vector<Blob> current_blobs, vector<Blob> past_blobs, in
   return current_count;
 }
 
+void compute_max_area(Blob blob) {
+  int cur_max = blob.max_area;
+  if (blob.area>blob.max_area) { blob.max_area = blob.area; }
+  Serial.println("area as of function: "+String(blob.max_area));
+}
 
 /*
 vector<Blob> which_blob(vector<Blob> blobs, const Frame& cur_frame, const Prev_Frame& prev_frame){

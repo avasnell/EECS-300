@@ -199,6 +199,13 @@ void readBlobs_from_Frame() {
   current_frame.blobs = which_blobs;
 
   //track_blob_direction_and_count(current_frame.blobs, current_frame, previous_frame, counter);
+  Serial.println();
+  //Serial.print("FRAME,");
+  /*
+  for (int i=0;i <768;i++) {
+    Serial.print(tempValues[i]);
+    Serial.print(i < 767 ? "," : "\n");
+  }*/
   print_vector_of_Blobs(current_frame.blobs);
   counter.count = count_people_entered(current_frame.blobs, current_frame.previous_frame.prev_blobs, counter.count);
   Serial.println();
@@ -232,6 +239,8 @@ Serial.println("Threshold: " + String(baseline + ABOVE_BASELINE));
   previous_frame.prev_hot_pixels_count = current_frame.hot_pixels_count;
   previous_frame.prev_blobs = current_frame.blobs;
   previous_frame.prev_number_of_blobs = current_frame.number_of_blobs;
+
+   //live view for matlab ,,,one line with all 768 temperature
 }
 
 /*
