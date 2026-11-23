@@ -67,3 +67,8 @@ void map_blob_pixels_to_matrix(std::vector<Pixel> pixels, int (&mapped_matrix)[2
 int count_people_entered(vector<Blob> current_blobs, vector<Blob> past_blobs, int count);
 void merge_case(Frame& current_frame, Prev_Frame& previous_frame);
 #endif
+
+// wifi
+void init_non_vol_storage();
+void update_non_vol_count();
+void update_person_count();
