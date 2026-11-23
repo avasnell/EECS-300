@@ -10,6 +10,10 @@
 #include <queue>
 #include <string>
 
+// wifi
+#include "WirelessCommunication.h"
+#include "sharedVariable.h"
+#include "Preferences.h"
 
 #define EMMISIVITY 0.95
 #define TA_SHIFT 8 
@@ -73,6 +77,11 @@ void thermalsetup() {
   MLX90640_SetRefreshRate(MLX90640_address, 0x05); // 0x05 = 8Hz, 0x04 = 4Hz, 0x03 = 2Hz, 0x02 = 1Hz
   Wire.setClock(400000);
   calculate_baseline();
+
+  // initialize wifi
+  init_wifi_task();
+  init_non_vol_count();//initializes nonvolatile memory and retrieves latest count
+  INIT_SHARED_VARIABLE(x, counter);//init shared variable used to tranfer info to WiFi core
 }
 
 void thermalloop(void) {
@@ -426,4 +435,3 @@ void convertTempValuesToGrid(int tempValues[24][32], float tempValuesFloat[32*24
 bool person_detected() {
   return person_thermal;
 }
-

@@ -5,6 +5,11 @@
 #include "MLX_files/MLX90640_API.h"
 #include "MLX_files/MLX90640_I2C_Driver.h"
 
+// wifi
+#include "WirelessCommunication.h"
+#include "sharedVariable.h"
+#include "Preferences.h"
+
 void setup() {
   // put your setup code here, to run once:
   thermalsetup();

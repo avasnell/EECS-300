@@ -5,6 +5,12 @@
 #include <map>
 #include <algorithm>
 
+// wifi
+#include "WirelessCommunication.h"
+#include "sharedVariable.h"
+#include "Preferences.h"
+volatile shared_uint32 x;
+Preferences nonVol;//used to store the count in nonvolatile memory
 
 using namespace std;
 
@@ -421,7 +427,12 @@ int count_people_entered(vector<Blob> current_blobs, vector<Blob> past_blobs, in
        if (start_y <= THRESHOLD_DISTANCE_TOP && end_y >= THRESHOLD_DISTANCE_BOTTOM) {
         
            if(!tracked_history[j].is_big_blob && !tracked_history[j].inside_bb){ //if blob is not big and not inside a big blob, count normally
-            current_count += 1; 
+            current_count += 1;
+
+            // update wifi
+            update_person_count();//update shared variable x (shared with WiFi task)
+            update_non_vol_count();//updates nonvolatile count 
+
             Serial.println("-> Person Entered Frame!"); //print for second person
           } else if (tracked_history[j].is_big_blob){ // if big blob, count 2
             current_count += 2;
@@ -495,4 +506,28 @@ void merge_case(Frame& current_frame, Prev_Frame& previous_frame){
 
   }
 } 
+}
+
+// wifi
+//initializes nonvolatile memory and retrieves latest count
+void init_non_vol_count()
+{
+  nonVol.begin("nonVolData", false);//Create a “storage space” in the flash memory called "nonVolData" in read/write mode
+  count = nonVol.getUInt("count", 0);//attempts to retrieve "count" from nonVolData, sets it 0 if not found
+}
+
+//updates nonvolatile memery with lates value of count
+void update_non_vol_count()
+{
+  nonVol.putUInt("count", count);//write count to nonvolatile memory
+}
+
+//example code that updates a shared variable (which is printed to server)
+//under the hood, this implementation uses a semaphore to arbitrate access to x.value
+void update_person_count()
+{
+  //minimized time spend holding semaphore
+  LOCK_SHARED_VARIABLE(x);
+  x.value = counter;
+  UNLOCK_SHARED_VARIABLE(x);   
 }

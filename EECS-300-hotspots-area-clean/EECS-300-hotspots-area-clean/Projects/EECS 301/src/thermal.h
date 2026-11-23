@@ -3,6 +3,11 @@
 #include "MLX_files/MLX90640_API.h"
 #include "MLX_files/MLX90640_I2C_Driver.h"
 
+// wifi
+#include "WirelessCommunication.h"
+#include "sharedVariable.h"
+#include "Preferences.h"
+
 void thermalsetup();
 void calculate_baseline();
 void thermalloop(void); 
